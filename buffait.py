@@ -3,7 +3,8 @@ from enum import Enum
 from typing import Union, List
 import re
 from functools import reduce
-
+from typing import TypeVar
+T = TypeVar('T')  
 '''
     BUFFAIT
     
@@ -37,6 +38,7 @@ class BufferNode(Node):
     # TODO: support a list of size_dependencies that could be values or integer nodes e.g. for declarations like char *buf[BUFF_SIZE - 10]
             # we would require 2 size dependencies: BUFF_SIZE (an integer Node) and -10
     size: Union[str, int, 'IntegerNode'] = -1
+    size_dependencies: List[Union[str, int, 'IntegerNode']]
 
     def __init__(self, size: Union[str, int, 'IntegerNode'], name: str):
         super().__init__(NodeType.BUFFER, name)
@@ -76,7 +78,9 @@ def make_nodes_from_line(line: str) -> List[Node]:
     return list(filter(None, res))
     
 
-
+def flat_map(l: List[List[T]]) -> List[T]:
+    res = [inner_nodes for outer_list in l for inner_nodes in outer_list]
+    return res
 
 # currently this is identical in functionality to the next_integer_nodes function
 # as we are simply creating a set of nodes at this stage
@@ -118,7 +122,7 @@ def node_by_var_name(name: str, all_nodes: List[Node]) -> Node:
     res = N[0] if N else []
     return res
 
-def connect_chain(A: Node, all_nodes: List[Node]):
+def populate_size_dependencies(A: Node, all_nodes: List[Node]):
     if type(A) == BufferNode:
         if type(A.size) != int:
             new_size = node_by_var_name(A.size, all_nodes)
@@ -128,7 +132,7 @@ def connect_chain(A: Node, all_nodes: List[Node]):
 
 def connect_nodes(buffer_nodes: List[BufferNode], non_buffer_nodes: List[Node]) -> List[BufferNode]:
     for buffer in buffer_nodes:
-        connect_chain(buffer, buffer_nodes + non_buffer_nodes)
+        populate_size_dependencies(buffer, buffer_nodes + non_buffer_nodes)
         
     
 def make_graph(source_file: str) -> Node:

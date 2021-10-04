@@ -39,7 +39,7 @@ class TestBufferNodeCreation(unittest.TestCase):
         self.assertEqual(integer.value, '10')
 
     def test_two_buffers_on_one_line(self):
-        
+
         node_list: List[buffait.Node] = buffait.make_nodes_from_line(
             'char bufA[BUFF_SIZE]; char bufB[BUFF_SIZE];')
         buffer_list = list(
@@ -61,6 +61,35 @@ class TestBufferNodeCreation(unittest.TestCase):
         self.assertEqual(buffer_B.name, 'bufB')
         self.assertEqual(buffer_B.size, 'BUFF_SIZE')
 
+
+class TestBufferNodeCreation(unittest.TestCase):
+    def test_node_linking(self):
+        lines_of_source_code: List[str] = [
+            'int j = 2;',
+            'int i = j;',
+            'int myArray[i]'
+        ]
+
+        node_list = list(
+            buffait.flat_map(
+                map(lambda l: buffait.make_nodes_from_line(l), lines_of_source_code)
+            )
+        )
+
+
+        self.assertEqual(len(node_list), 3)
+
+        buffer = node_list[2]
+        self.assertEqual(buffer.name, 'myArray')
+        self.assertEqual(buffer.size, 'i')
+
+
+        buffait.populate_size_dependencies(buffer, node_list)
+        self.assertEqual(buffer.name, 'myArray')
+        self.assertEqual(buffer.size, 'i')
+        self.assertEqual(buffer.get_actual_size(), 2)
+
+        
 # class TestSingleBufferSourceFile(unittest.TestCase):
 #     def test_single_buffer_size(self):
 #         single_buffer_graph = buffait.make_graph('./tests/single_buffer.c')
