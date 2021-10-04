@@ -17,9 +17,10 @@ class NodeType(Enum):
     BUFFER = 1
     INT    = 2
 
-buffer_regex = re.compile(r'[a-z]* (?P<name>[\w\d]*)\[(?P<size>[\w_]*)\]')
+buffer_regex = re.compile(r'[a-z]* (?P<name>[\w\d]*)\[(?P<size>[\w_]*)\].*')
 integer_define_regex = re.compile(r'#define (?P<name>\w+) (?P<value>\d+)') # for #define declarations
-integer_declaration_regex = re.compile(r'int (?P<name>\w)[ =]*(?P<value>\d);') # for #define declarations
+integer_declaration_regex = re.compile(
+    r'int (?P<name>\w+)[ =]*(?P<value>\d+);.*')  # for int declarations
 
 # Node in the graph of buffer objects and types used in the creation/mutation/access
 # of buffers
