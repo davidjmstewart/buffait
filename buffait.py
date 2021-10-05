@@ -30,9 +30,11 @@ class Node:
     node_type: NodeType = NodeType.BUFFER
     name: str = ""
 
-    def __init__(self, type: NodeType, name: str):
+    def __init__(self, type: NodeType, name: str, all_nodes: List['Node']):
         self.node_type = type    
         self.name = name
+
+
 
 class BufferNode(Node):
     # TODO: support a list of size_dependencies that could be values or integer nodes e.g. for declarations like char *buf[BUFF_SIZE - 10]
@@ -48,27 +50,62 @@ class BufferNode(Node):
     # value is reached
     def get_actual_size() -> int:
         size = 0
-
         pass
+
+    def create_dependency_array(size: str, all_nodes: List['Node'])-> List[Union[int, 'IntegerNode']]:
+        #we need to call size_to_dependency_array to get the nodes
+        # then we must filter out the nodes that have already been created so that we
+        # don't have duplicates
+        pass
+
+    # takes a description of a buffer size and returns the elements as nodes e.g. if the buffer were
+    # buf[10 + i - 1 + j], the input size would be 10 + i - 1 + j
+    # and the return value would be an array of 3 elements: an integer, 1 which is a constant component (10 - 1 = 9)
+    #  and 2 integer nodes that are symbolic
+    # i.e. i and j
+    @staticmethod
+    def size_to_dependency_array(size: str) -> List['Node']:
+        pass    
 
 class IntegerNode(Node):
     value: int = 0
+    value_dependencies: List[Union[str, int, 'IntegerNode']]
 
     def __init__(self, value: Union[int, 'IntegerNode'], name: str):
         super().__init__(NodeType.INT, name)
         self.value = value   
 
+    # if value is an IntegerNode, follow the nodes until the actual value is reached
+    def get_actual_value() -> int:
+        pass
+
+    def create_dependency_array(size: str, all_nodes: List['Node'])-> List[Union[int, 'IntegerNode']]:
+        #we need to call size_to_dependency_array to get the nodes
+        # then we must filter out the nodes that have already been created so that we
+        # don't have duplicates
+        pass
+
+    @staticmethod
+    def value_to_dependency_array(value: str) -> List['Node']:
+        pass
+
 # given a line of source code, create Node objects for any declared integers or buffers on the line of code
-def make_nodes_from_line(line: str) -> List[Node]:
+def make_nodes_from_line(line: str, all_nodes: List[Node]) -> List[Node]:
     # use all of our regex types on this source code line to determine all possible node types included on this line
 
-    integer_define_nodes = list(map(lambda m: IntegerNode(
-        m.group('value'), m.group('name')), integer_define_regex.finditer(line)))
+    integer_define_nodes = list(
+        map(lambda m: IntegerNode(
+            m.group('value'), m.group('name'), all_nodes), integer_define_regex.finditer(line)
+        )
+    )
 
-    integer_declaration_nodes = list(map(lambda m: IntegerNode(
-        m.group('value'), m.group('name')), integer_declaration_regex.finditer(line)))
+    integer_declaration_nodes = list(
+        map(lambda m: IntegerNode(
+            m.group('value'), m.group('name'), all_nodes), integer_declaration_regex.finditer(line)
+        )
+    )
 
-    buffer_nodes = list(map(lambda m: BufferNode(m.group('size'), m.group('name')), buffer_regex.finditer(line)))
+    buffer_nodes = list(map(lambda m: BufferNode(m.group('size'), m.group('name'), all_nodes), buffer_regex.finditer(line)))
 
     nodes = [integer_define_nodes, integer_declaration_nodes, buffer_nodes]
 
@@ -134,13 +171,10 @@ def connect_nodes(buffer_nodes: List[BufferNode], non_buffer_nodes: List[Node]) 
     for buffer in buffer_nodes:
         populate_size_dependencies(buffer, buffer_nodes + non_buffer_nodes)
         
-    
-def make_graph(source_file: str) -> Node:
-    # for the sake of demonstration, we assume source_file will always be a valid path to C source code
-    # read every line of source code from the file pointed to by source_file
-    f = open(source_file, "r")          
-    source_lines = f.readlines() # N.B. Parsing a C file line-by-line will be error prone as there are no semantic newlines in C (instructions are separated with ; not a newline)
-    
+
+# TODO: rename to make_buffer_trees
+def make_buffer_trees(source_file_array: str) -> List[BufferNode]:
+
     buffer_nodes = []
     non_buffer_nodes = [] # nodes that are relevant to buffer analysis (e.g. integers) but are not buffers themselves
     buffer_graphs = []    # A list of graphs of buffer allocations found in the program. These are the graphs that will be used to determine if
@@ -154,8 +188,6 @@ def make_graph(source_file: str) -> Node:
         buffer_nodes_in_line = list(
             filter(lambda x: type(x) is BufferNode, nodes_in_line))
 
-
-
         buffer_nodes = next_buffer_nodes(
             buffer_nodes, buffer_nodes_in_line)
 
@@ -166,9 +198,14 @@ def make_graph(source_file: str) -> Node:
                                                              # Now we want to obtain the next state by giving our update function the current state, and the nodes we just found
                                                              # so it can determine if a new graph needs to be added to the list, or if an existing list element needs to be changed
         
-    connect_nodes(buffer_nodes, non_buffer_nodes)
+    # connect_nodes(buffer_nodes, non_buffer_nodes)
                                                           
-
+def make_source_file_array(path: str) -> List[str]:
+    # for the sake of demonstration, we assume source_file will always be a valid path to C source code
+    # read every line of source code from the file pointed to by source_file
+    f = open(path, "r")          
+    source_lines = f.readlines() # N.B. Parsing a C file line-by-line will be error prone as there are no semantic newlines in C (instructions are separated with ; not a newline)
+    return source_lines
 
 if __name__ == '__main__':
-    single_buffer_graph = make_graph('./tests/single_buffer.c')
+    single_buffer_graph = make_buffer_trees(make_source_file_array('./tests/single_buffer.c'))
