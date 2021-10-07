@@ -18,7 +18,7 @@ class NodeType(Enum):
     BUFFER = 1
     INT    = 2
 
-buffer_regex = re.compile(r'[a-z]* (?P<name>[\w\d]*)\[(?P<size>[\w_]*)\].*')
+buffer_regex = re.compile(r'[a-z]* (?P<name>[\w\d_]*)\[(?P<size>[\w\d \+\-]*)\].*')
 integer_define_regex = re.compile(r'#define (?P<name>\w+) (?P<value>\d+)') # for #define declarations
 integer_declaration_regex = re.compile(
     r'int (?P<name>\w+)[ =]*(?P<value>\d+);.*')  # for int declarations
@@ -30,7 +30,7 @@ class Node:
     node_type: NodeType = NodeType.BUFFER
     name: str = ""
 
-    def __init__(self, type: NodeType, name: str, all_nodes: List['Node']):
+    def __init__(self, type: NodeType, name: str):
         self.node_type = type    
         self.name = name
 
@@ -52,11 +52,24 @@ class BufferNode(Node):
         size = 0
         pass
 
+    @staticmethod
     def create_dependency_array(size: str, all_nodes: List['Node'])-> List[Union[int, 'IntegerNode']]:
-        #we need to call size_to_dependency_array to get the nodes
-        # then we must filter out the nodes that have already been created so that we
-        # don't have duplicates
-        pass
+        dependencies = BufferNode.size_to_dependency_array(size)
+        non_constant_dependencies = list(
+            filter(lambda x: type(x) is not int, dependencies)
+        )
+
+        constant_dependencies = list(
+            filter(lambda x: type(x) == int, dependencies)
+        )
+
+        res = list(
+            filter(
+                lambda x: any(e for e in non_constant_dependencies if x.name == e.name), all_nodes
+            )
+        ) + constant_dependencies
+
+        return res
 
     # takes a description of a buffer size and returns the elements as nodes e.g. if the buffer were
     # buf[10 + i - 1 + j], the input size would be 10 + i - 1 + j
@@ -65,13 +78,35 @@ class BufferNode(Node):
     # i.e. i and j
     @staticmethod
     def size_to_dependency_array(size: str) -> List['Node']:
-        pass    
+        size = size.replace(" ", "")
+        positive_dependency_regex = re.compile(r'(?<!-)(?P<value>[\d\w]+)') 
+        negative_dependency_regex = re.compile(r'(?P<value>-[\d]+)') 
+        positive_dependency_nodes = list(
+            map(lambda m: int(m.group('value')) if m.group('value').isdigit() else IntegerNode(
+                None, m.group('value'), []), positive_dependency_regex.finditer(size)
+            )
+        )
+
+        negative_dependency_nodes = list(
+            map(lambda m: int(m.group('value')) if m.group('value').replace("-","").isdigit() else IntegerNode(
+                None, m.group('value'), []), negative_dependency_regex.finditer(size)
+            )
+        )       
+
+        constant = reduce(
+            lambda a, b: a + b, 
+                list( filter (lambda x: type(x) == int, positive_dependency_nodes  + negative_dependency_nodes))
+        , 0)
+
+        non_constant_nodes = list(filter(lambda x: type(x) != int, positive_dependency_nodes + negative_dependency_nodes))
+        res = [constant] + non_constant_nodes if constant > 0 else non_constant_nodes
+        return res    
 
 class IntegerNode(Node):
     value: int = 0
     value_dependencies: List[Union[str, int, 'IntegerNode']]
 
-    def __init__(self, value: Union[int, 'IntegerNode'], name: str):
+    def __init__(self, value: Union[int, 'IntegerNode'], name: str, all_nodes: List['Node']):
         super().__init__(NodeType.INT, name)
         self.value = value   
 
